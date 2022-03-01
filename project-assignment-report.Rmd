@@ -1,0 +1,267 @@
+---
+title: Assigning dissertation projects to Epidemiology and Public Health MSc students
+author: Thomas Battram
+output:
+  bookdown::html_document2:
+    toc: true
+    toc_float: true
+    theme: cosmo
+    number_sections: false
+    code_folding: show
+---
+
+```{r setup, message=FALSE, warning=FALSE, include=FALSE}
+
+## pkgs
+suppressWarnings(suppressPackageStartupMessages({
+library(bookdown) # extra markdown options
+library(knitr) # ...
+library(kableExtra) # extra nice tables
+library(tidyverse) # tidy code and data
+library(usefunc) # own package of useful functions
+library(readxl) # read excel spreadsheets
+library(lpSolve) # to solve the problem
+}))
+
+knitr::opts_chunk$set(echo = TRUE, 
+                      warning = FALSE, 
+                      message = TRUE, 
+                      cache = FALSE, 
+                      dpi = 300 
+                      )
+```
+
+## Background
+
+Each year students are required to do a dissertation to complete their MSc in Public Health or Epidemiology. Students are given a long list of project titles and descriptions to choose from. They put down their top 5 choices in order of preference. Students can of course choose the same projects, this makes assigning projects in a fair way difficult. Previous years, the dissertation leads have manually assigned students to projects using an iterative process to try and maximise the number of first choice projects assigned. However, this can be laborious and may not be the fairest way to do things given human error. A more programatic method may not suffer from such pitfuls.
+
+If we have students preferentially noting their choices then we can assign each project they chose a number, from 1 to the number of choices they note down (in this case 5). Each student will be assigned a project which will correspond to their first, second, third, fourth or fifth choice, which can be represented by numbers 1-5, we'll denote this as $z$. The goal of fair assignment will be to minimise the sum of $z$ across students, we'll denote this sum as $X$. Putting this in equation form: 
+
+\begin{equation}
+  X = \sum_{i=1}^{n} z_{i}
+  (\#eq:choices)
+\end{equation}
+
+where $n$ = number of students, $z_i$ = the choice value for the $i$ th student. We are looking to minimise $X$.
+
+This problem is essentially ["the assignment problem"](https://en.wikipedia.org/wiki/Assignment_problem) - one that linear algebra can solve and luckily for us there is an R package able to do this for us: [`lpSolve`](https://cran.r-project.org/web/packages/lpSolve/index.html).
+
+## Example using lpSolve
+
+Below is a scenario where there are 4 students and 4 projects to chose from. As in our real scenario, each student puts down their projects in order of choice. Their preferences are as follows:
+
+```{r, results="asis"}
+# Set assignment projects matrix
+projects <- matrix(c(1, 2, 3, 4,
+                     4, 2, 3, 1,
+                     2, 1, 4, 3,
+                     1, 3, 4, 2), nrow = 4, byrow = TRUE)
+
+# give rownames and colnames
+colnames(projects) <- paste("project", 1:4)
+rownames(projects) <- paste("student", 1:4)
+
+# Print assignment projects matrix
+kbl(projects) %>%
+  kable_styling()
+```
+
+Unfortunately, student 1 and student 4 both put project 1 as their first choice. To work out the best way to assign these projects to minimise $X$ (as seen in Equation \@ref(eq:choices)), we can use `lpSolve` as follows:
+
+```{r}
+lp.assign(projects) # Shows whether you can run the analysis given your data and what the minimum value of X is.
+
+## Extract the results
+assignments <- lp.assign(projects)$solution
+colnames(assignments) <- colnames(projects)
+rownames(assignments) <- rownames(projects)
+print(assignments)
+```
+
+Here the `1`s represent what the students have been assigned and the `0`s represent projects they haven't been assigned.
+
+## Using project spreadsheet from 2020/2021 
+
+### Cleaning the data
+
+First step is to clean the data.
+
+```{r clean-data}
+## data 
+filenam <- "FINAL student selections 2021.xlsx"
+epi_data <- read_xlsx(filenam, sheet = "EPI")
+ph_data <- read_xlsx(filenam, sheet = "PH")
+
+## make new column of names that hide identities of MSc students
+epi_data <- epi_data %>%
+  mutate(name = paste("epi_student", 1:nrow(.)))
+
+ph_data <- ph_data %>%
+  mutate(name = paste("ph_student", 1:nrow(.)))
+
+## clean epi data
+epi_data_c <- epi_data %>%
+  dplyr::select(name, C1 = `1`, C2 = `2`, C3 = `3`, C4 = `4`, C5 = `5`) %>%
+  mutate(across(where(is.character), ~na_if(., "NA")))
+
+## clean ph data
+ph_data_c <- ph_data %>%
+  dplyr::select(name, C1 = `1`, C2 = `2`, C3 = `3`, C4 = `4`, C5 = `5`) %>%
+  mutate(across(where(is.character), ~na_if(., "NA")))
+
+## combine data
+merged_data_c <- rbind(epi_data_c, ph_data_c)
+
+## Removing people as they haven't got choices on here
+rows_to_rm <- which(is.na(merged_data_c$C1) | is.na(merged_data_c$C2))
+removed_people <- merged_data_c[rows_to_rm,]
+merged_data_c <- merged_data_c[-rows_to_rm, ]
+
+## split into people and choices tabs
+id_cols <- c("name")
+people_tab <- merged_data_c[, id_cols] %>%
+  mutate(course = ifelse(name %in% epi_data_c$name, "epi", "ph"))
+tab <- merged_data_c[, !colnames(merged_data_c) %in% id_cols]
+```
+
+These people were removed because they didn't make choices or were due to choose later:
+
+```{r removed-people, echo=FALSE}
+kbl(removed_people, caption = "Students removed from project assignment") %>%
+  kable_styling() %>%
+  footnote("C1 = First choice, C2 = second choice, etc.")
+```
+
+Here is a table of combined epi and PH students along with their choices:
+
+```{r merge-data, echo=FALSE}
+kbl(merged_data_c, caption = "Combined epidemiology and public health student choices") %>%
+  kable_styling() %>%
+  scroll_box(width = "100%", height = "450px") %>%
+  footnote("C1 = First choice, C2 = second choice, etc.")
+```
+
+### Reformatting for lpSolve
+
+In order to run `lpSolve` we need a square matrix - i.e. we need a table with the same number of columns (projects) as rows (people). Of course, we may not have the same number of projects and people, so we'll need to create dummy variables and values in order to fill out the square matrix.
+
+```{r make-matrix}
+
+## Change data so that you have a matrix with projects as columns and people as rows
+n <- nrow(tab)
+proj <- unique(unlist(tab))
+n_proj_choice <- length(proj)
+didne_choose_val <- 10000 # value for when people didn't choose a project as one of their top 5
+# proj <- letters[1:n_proj]
+proj_choice <- lapply(proj, function(p) {
+  sapply(1:nrow(tab), function(row) {
+    vec <- as.character(tab[row, ])
+    choice <- which(vec == p)
+    if (length(choice) == 0) choice <- didne_choose_val
+    return(choice)
+  })
+})
+names(proj_choice) <- proj
+proj_choice_mat <- bind_cols(proj_choice)
+proj_choice_mat <- as.matrix(proj_choice_mat)
+
+## Add in dummy individuals to make the matrix square
+proj_people_diff <- n_proj_choice - n
+for (i in 1:proj_people_diff) {
+  proj_choice_mat <- rbind(proj_choice_mat, rep(didne_choose_val, ncol(proj_choice_mat)))
+}
+```
+
+### Running lpSolve
+
+Now we can finally run the algorithm to find out which projects should be assigned which students! 
+
+```{r run-lpsolve}
+
+lp.assign(proj_choice_mat) # determines whether the problem can be solved using the data
+out_mat <- lp.assign(proj_choice_mat)$solution
+
+## Then just need to assign people back to the project
+colnames(out_mat) <- proj
+
+out <- map_dfr(1:nrow(out_mat), function(row) {
+  vec <- out_mat[row, ]
+  if (row > nrow(people_tab)) {
+    person <- tibble(name = "dummy", course = "dummy")
+  } else {
+    person <- people_tab[row, ]
+  }
+  proj_winner <- which(near(vec, 1))
+  out_proj <- names(proj_winner)
+  ori_choices <- as.character(tab[row, ])
+  which_choice <- which(ori_choices == out_proj)
+  if (length(which_choice) == 0) which_choice <- NA
+  out_tab <- tibble(project = out_proj, choice = which_choice)
+  out_tab <- cbind(person, out_tab)
+  return(out_tab)
+})
+
+out_merged <- out %>%
+  dplyr::filter(name != "dummy")
+```
+
+Here are the results:
+
+```{r show-results, echo=FALSE}
+kbl(out_merged, caption = "Project assignments") %>%
+  kable_styling() %>%
+  scroll_box(width = "100%", height = "450px")
+```
+
+### Algorithmic and manual assignment comparison
+
+If we compare our results with the manual assignment of projects, we can see which method did a better job of minimising $X$. 
+
+```{r x-comparison-with-old-results}
+ori_data_merged <- bind_rows(epi_data, ph_data) %>%
+  dplyr::select(name, man_project = ASSIGNED, man_choice = CHOICE)
+message("X in the manual assignment = ", sum(ori_data_merged$man_choice, na.rm = TRUE))
+message("X in the algorithmic assignment = ", sum(out_merged$choice))
+```
+
+Here is a comparison of project assignments, side-by-side:
+
+```{r tab-comparison-with-old-results, echo=FALSE, message=FALSE}
+out_merged %>%
+  rename(alg_project = project, alg_choice = choice) %>%
+  left_join(ori_data_merged) %>%
+  kbl(caption = "Project assignment comparisons") %>%
+  kable_styling() %>%
+  scroll_box(width = "100%", height = "450px")
+```
+
+## Additions to the process
+
+One issue with assigning projects via an algorithm is that it can be hard to feed in extra layers of complexity without a fair bit more effort. 
+
+For example, to give PH students priority on projects that are listed as being suitable for both epi and PH, we'd need to figure out how to add this into the code. One option in this scenario is to simply subtract 1 from the "choice value" for PH students where they've put down a project suitable for students from both courses.
+
+Another option for adding layers of complexity, is to manually fiddle with the assignments post-algorithm as it's easy to flag cases of interest in the code and then deal with them. So, one thing we might want to flag are any examples where a project that is suitable for both epi and PH students has been assigned to an epi student. 
+
+```{r flagging-both-projects}
+
+## Checking "both" projects that EPI students have been assigned
+chosen_b <- out_merged$project[grepl("B", out_merged$project)]
+b_project_flags <- lapply(chosen_b, function(b) {
+  temp_out <- out_merged %>%
+    dplyr::filter(project == b)
+  if (temp_out$course == "epi") {
+    merged_data_c %>% 
+      filter_all(any_vars(. %in% b)) %>%
+      left_join(out_merged) %>%
+      return()
+  } else {
+    return(NULL)
+  }
+})
+names(b_project_flags) <- chosen_b
+b_project_flags <- b_project_flags[!sapply(b_project_flags, is.null)]
+b_project_flags
+
+```
+
