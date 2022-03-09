@@ -41,6 +41,16 @@ rows_to_rm <- which(is.na(merged_data_c$C1) | is.na(merged_data_c$C2))
 removed_people <- merged_data_c[rows_to_rm,]
 if (length(rows_to_rm) != 0) merged_data_c <- merged_data_c[-rows_to_rm, ]
 
+## Manually remove people
+nam_to_rm <- tibble(SURNAME = c(""), FIRSTNAME = c("")) ## ADD NAMES HERE
+if (all(nam_to_rm$SURNAME != "")) {
+	for (i in 1:nrow(nam_to_rm)) {
+		message("removing: ", nam_to_rm$FIRSTNAME, " ", nam_to_rm$SURNAME)
+		merged_data_c <- merged_data_c %>%
+			dplyr::filter(!SURNAME == nam_to_rm$SURNAME[i] & !FIRSTNAME == nam_to_rm$FIRSTNAME[i])
+	}
+}
+
 ## split into people and choices tabs
 id_cols <- c("SURNAME", "FIRSTNAME")
 people_tab <- merged_data_c[, id_cols] %>%
@@ -105,6 +115,17 @@ out <- map_dfr(1:nrow(out_mat), function(row) {
 out_merged <- out %>%
 	dplyr::filter(SURNAME != "dummy" & FIRSTNAME != "dummy")
 
+## See how many people were assigned their 1st choice, 2nd choice, etc.
+out_merged %>%
+	dplyr::filter(course == "ph") %>%
+	pull(choice) %>%
+	table()
+
+out_merged %>%
+	dplyr::filter(course == "epi") %>%
+	pull(choice) %>%
+	table()
+
 # ------------------------------------------------------------------------
 # Extra checks on the project assignments
 # ------------------------------------------------------------------------
@@ -137,12 +158,14 @@ if (any(is.na(out_merged$choice))) {
 	assigned_projects <- out_merged$project
 	failed_assignment <- out_merged[is.na(out_merged$choice), ] %>%
 		left_join(merged_data_c)
+	message("Here are the individuals and the choices they put down: ")
+	print(failed_assignment)
 	failed_choices <- failed_assignment[,c("C1", "C2", "C3", "C4", "C5")]
 	choices_taken <- sapply(failed_choices, function(x) {
 		if (is.na(x)) return(TRUE)
 		return(x %in% assigned_projects)
 	})
-	if (all(choices_taken)) message("All their choices were assigned to other people.\n")
+	if (all(choices_taken)) message("\nAll their choices were assigned to other people.\n")
 
 	message("Let's check the choices of those other people\n")
 	
@@ -153,6 +176,9 @@ if (any(is.na(out_merged$choice))) {
 
 	temp_merged_dat <- merged_data_c %>%
 		dplyr::filter(SURNAME %in% temp_out$SURNAME)
+
+	message("Here are the individuals that have been assigned the projects of choice by those who couldn't be assigned a project: ")
+	print(temp_merged_dat)
 
 	taken_projects <- sapply(1:5, function(x) {
 		projs <- temp_merged_dat[[paste0("C", x)]]
