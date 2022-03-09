@@ -12,9 +12,9 @@ The [`project-assignment-report.Rmd`](project-assignment-report.Rmd) file was us
 
 1. Installing all R packages seen in first code chunk of [`project-assignment-report.Rmd`](project-assignment-report.Rmd)
 2. Putting `FINAL student selections 2021.xlsx` in the same directory as [`project-assignment-report.Rmd`](project-assignment-report.Rmd)
-3. Running [`render-report.sh`](render-report.sh)
+3. Running [`bash render-report.sh`](render-report.sh)
 
-[`project-assignment.R`](project-assignment.R) is essentially the same as [`project-assignment-report.Rmd`](project-assignment-report.Rmd), but without the explanation of each step.
+[`project-assignment-2022.R`](project-assignment-2022.R) does the assignment and extra checks for students of the year 2022.
 
 ## NOTES
 

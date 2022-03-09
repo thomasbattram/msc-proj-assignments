@@ -216,6 +216,16 @@ sum(epi_data$CHOICE) + sum(ph_data$CHOICE, na.rm=T) # 154
 ## Algorithmic assignments
 sum(out_merged$choice) # 123
 
+out_merged %>%
+	dplyr::filter(course == "ph") %>%
+	pull(choice) %>%
+	table()
+
+out_merged %>%
+	dplyr::filter(course == "epi") %>%
+	pull(choice) %>%
+	table()
+
 # improvement of 31 is pretty good I think
 
 

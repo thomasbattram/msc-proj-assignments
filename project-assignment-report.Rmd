@@ -224,6 +224,29 @@ message("X in the manual assignment = ", sum(ori_data_merged$man_choice, na.rm =
 message("X in the algorithmic assignment = ", sum(out_merged$choice))
 ```
 
+```{r tab-comparison-choices, echo=FALSE, message=FALSE}
+choice_tab <- out_merged %>%
+  rename(alg_project = project, alg_choice = choice) %>%
+  left_join(ori_data_merged)
+
+ph_tab <- choice_tab[choice_tab$course == "ph", ]
+epi_tab <- choice_tab[choice_tab$course == "epi", ]
+
+choice_tab2 <- map_dfr(1:5, function(x) {
+  epi_choice_tab <- tibble(course = "epi", choice = x, n_projects_alg = sum(epi_tab$alg_choice == x), n_projects_man = sum(epi_tab$man_choice == x))
+
+  ph_choice_tab <- tibble(course = "ph", choice = x, n_projects_alg = sum(ph_tab$alg_choice == x), n_projects_man = sum(ph_tab$man_choice == x, na.rm=T))
+
+  out <- bind_rows(epi_choice_tab, ph_choice_tab)
+  return(out)
+})
+
+choice_tab2 %>% 
+  kbl(caption = "Number of people given each choice in when using the lpsolve algorithm and using manual assignment.") %>%
+  kable_styling()
+```
+
+
 Here is a comparison of project assignments, side-by-side:
 
 ```{r tab-comparison-with-old-results, echo=FALSE, message=FALSE}
@@ -234,6 +257,8 @@ out_merged %>%
   kable_styling() %>%
   scroll_box(width = "100%", height = "450px")
 ```
+
+
 
 ## Additions to the process
 
