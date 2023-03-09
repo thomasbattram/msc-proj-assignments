@@ -3,7 +3,7 @@
 Steps for dissertation assignment:
 
 1. Project list is obtained
-2. Students choose top 5 projects
+2. Students choose top 10 projects
 3. Projects are assigned to students with the aim of giving them their favourite project
 
 Issue is that students may want to do the same projects - damn students! So projects need to be assigned in the fairest possible way. [`project-assignment-report.html`](project-assignment-report.html) shows the process of using the [`lpSolve`](https://cran.r-project.org/web/packages/lpSolve/index.html) R package to try and assign projects. 
@@ -15,6 +15,8 @@ The [`project-assignment-report.Rmd`](project-assignment-report.Rmd) file was us
 3. Running [`bash render-report.sh`](render-report.sh)
 
 [`project-assignment-2022.R`](project-assignment-2022.R) does the assignment and extra checks for students of the year 2022.
+
+[`project-assignment-2023.R`](project-assignment-2023.R) does the assignment and extra checks for students of the year 2023.
 
 ## NOTES
 
